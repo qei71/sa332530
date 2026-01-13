@@ -1,44 +1,165 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-    <title>餐廳訂位系統</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              primary: '#F97316', // Orange-500
-              secondary: '#EA580C', // Orange-600
-              background: '#FFF7ED', // Orange-50
-            }
-          }
-        }
-      }
-    </script>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>餐廳官方帳號服務</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
     <style>
-      /* Hide scrollbar for clean UI */
-      ::-webkit-scrollbar {
-        width: 0px;
-        background: transparent;
-      }
+        body { font-family: sans-serif; margin: 0; padding: 0; }
+        /* 載入畫面 */
+        #loading-screen {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: url('https://i.ibb.co/93NGBjjh/IMG-6773.jpg') no-repeat center center;
+            background-size: cover; z-index: 9999;
+        }
+        .container { padding: 20px; }
+        .nav-bar { display: flex; overflow-x: auto; background: #eee; padding: 10px; position: sticky; top:0; }
+        .nav-item { padding: 10px; white-space: nowrap; cursor: pointer; }
+        .active { color: #00b900; font-weight: bold; border-bottom: 2px solid #00b900; }
+        .card { border: 1px solid #ddd; margin-bottom: 10px; padding: 15px; border-radius: 8px; }
+        .admin-tag { background: red; color: white; padding: 2px 5px; border-radius: 4px; font-size: 12px; }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "recharts": "https://esm.sh/recharts@^3.6.0"
-  }
-}
-</script>
 </head>
-  <body class="bg-gray-50 text-gray-800">
-    <div id="root"></div>
-  </body>
+<body>
+    <div id="app">
+        <div id="loading-screen" v-if="isLoading"></div>
+
+        <div v-else class="container">
+            <div class="nav-bar">
+                <div class="nav-item" :class="{active: tab==='menu'}" @click="tab='menu'">餐廳菜單</div>
+                <div class="nav-item" :class="{active: tab==='booking'}" @click="tab='booking'">線上訂位</div>
+                <div class="nav-item" :class="{active: tab==='faq'}" @click="tab='faq'">常見問題</div>
+                <div class="nav-item" :class="{active: tab==='member'}" @click="tab='member'">會員中心</div>
+                <div v-if="isAdmin" class="nav-item" :class="{active: tab==='admin'}" @click="tab='admin'">後台管理 🔒</div>
+            </div>
+
+            <div v-if="tab==='menu'">
+                <h2>精選菜單</h2>
+                <div v-for="item in menuData" class="card">
+                    <img :src="item.圖片連結" style="width:100%; border-radius: 5px;">
+                    <h3>{{item.品項}} - ${{item.價格}}</h3>
+                </div>
+            </div>
+
+            <div v-if="tab==='booking'">
+                <h2>線上訂位</h2>
+                <form @submit.prevent="submitBooking">
+                    <p>日期：<input type="date" v-model="form.date" required @change="checkMonday"></p>
+                    <p>時間：<input type="time" v-model="form.time" required></p>
+                    <p>人數：<input type="number" v-model="form.guests" min="1" required></p>
+                    <p>預點菜單：<textarea v-model="form.preOrder" placeholder="請輸入餐點名稱與數量"></textarea></p>
+                    <button type="submit" style="width:100%; padding:10px; background:#00b900; color:#fff;">確認訂位</button>
+                </form>
+            </div>
+
+            <div v-if="tab==='member'">
+                <h2>會員中心</h2>
+                <div v-if="!userProfile.userId">LIFF 登入中...</div>
+                <div v-else>
+                    <p>姓名：{{userProfile.displayName}}</p>
+                    <p>手機：<input type="tel" v-model="phone" placeholder="請輸入手機號碼驗證權限"></p>
+                    <button @click="verifyRole">驗證身分</button>
+                    <p v-if="isAdmin"><span class="admin-tag">管理員模式已啟動</span></p>
+                </div>
+            </div>
+
+            <div v-if="tab==='admin' && isAdmin">
+                <h2>📊 後台管理系統</h2>
+                <div class="card">
+                    <h3>今日營收統計 (POS)</h3>
+                    <p>總訂單：{{adminData.posStats.length}} 筆</p>
+                </div>
+                <h3>即將到來訂位</h3>
+                <div v-for="res in adminData.allReservations" class="card">
+                    <p>客戶：{{res.姓名}} ({{res.人數}}人)</p>
+                    <p>時間：{{res.日期}} {{res.時間}}</p>
+                    <p>預點：{{res.預點內容}}</p>
+                    <button>修改狀態</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GAS_URL = '您的_GAS_網頁應用程式_URL';
+
+        Vue.createApp({
+            data() {
+                return {
+                    isLoading: true,
+                    tab: 'menu',
+                    phone: '',
+                    isAdmin: false,
+                    userProfile: {},
+                    menuData: [],
+                    adminData: { allReservations: [], posStats: [] },
+                    form: { date: '', time: '', guests: 1, preOrder: '' }
+                }
+            },
+            mounted() {
+                // 初始化 LIFF
+                liff.init({ liffId: "2008861231-1aeXBtp0" }).then(() => {
+                    if (liff.isLoggedIn()) {
+                        liff.getProfile().then(profile => {
+                            this.userProfile = profile;
+                            this.fetchData();
+                        });
+                    } else {
+                        liff.login();
+                    }
+                });
+                // 3秒後關閉啟動圖
+                setTimeout(() => { this.isLoading = false; }, 3000);
+            },
+            methods: {
+                fetchData() {
+                    fetch(GAS_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'getInitialData' })
+                    }).then(res => res.json()).then(data => {
+                        this.menuData = data.menu;
+                    });
+                },
+                checkMonday() {
+                    let day = new Date(this.form.date).getDay();
+                    if (day === 1) {
+                        alert("週一為本餐廳公休日，請選擇其他日期！");
+                        this.form.date = "";
+                    }
+                },
+                submitBooking() {
+                    fetch(GAS_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ 
+                            action: 'submitReservation', 
+                            data: { ...this.form, name: this.userProfile.displayName, phone: this.phone }
+                        })
+                    }).then(res => res.json()).then(data => {
+                        alert(data.msg);
+                        if(data.success) {
+                            liff.sendMessages([{ type: 'text', text: `🔔 訂位通知：已成功預約 ${this.form.date} ${this.form.time}` }]);
+                        }
+                    });
+                },
+                verifyRole() {
+                    fetch(GAS_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'getAdminData', phone: this.phone })
+                    }).then(res => res.json()).then(data => {
+                        if (data.isManager) {
+                            this.isAdmin = true;
+                            this.adminData.allReservations = data.allReservations;
+                            this.adminData.posStats = data.posStats;
+                            alert("已進入管理員模式");
+                        } else {
+                            alert("手機號碼無管理權限");
+                        }
+                    });
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
 </html>
