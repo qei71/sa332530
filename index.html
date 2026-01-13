@@ -3,207 +3,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>餐廳智慧管理系統</title>
+    <title>薩諾瓦訂位系統</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
     <style>
-        :root { --line-green: #00b900; --admin-red: #e74c3c; }
-        body { font-family: -apple-system, sans-serif; margin: 0; background: #f4f7f6; }
-        
-        /* 全螢幕載入圖 */
-        #loading-screen {
-            position: fixed; top:0; left:0; width:100%; height:100%;
-            background: #fff url('https://i.ibb.co/93NGBjjh/IMG-6773.jpg') no-repeat center center;
-            background-size: cover; z-index: 9999; transition: opacity 0.5s;
-        }
-
-        .container { padding: 15px; padding-top: 60px; }
-        
-        /* 導覽列 */
-        .nav-bar { 
-            position: fixed; top: 0; width: 100%; height: 50px;
-            background: white; display: flex; overflow-x: auto;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 1000;
-        }
-        .nav-item { 
-            flex: 1; min-width: 80px; line-height: 50px; text-align: center;
-            font-size: 14px; color: #666; cursor: pointer;
-        }
-        .nav-item.active { color: var(--line-green); border-bottom: 3px solid var(--line-green); font-weight: bold; }
-
-        /* 卡片設計 */
-        .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .btn-primary { background: var(--line-green); color: white; }
-        .btn-admin { background: var(--admin-red); color: white; margin-top: 10px; }
-
-        /* 管理後台樣式 */
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .stat-box { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; color: white; }
-        .bg-pending { background: #f39c12; }
-        .bg-success { background: #27ae60; }
+        body { font-family: -apple-system, sans-serif; margin: 0; background: #f9f9f9; }
+        #loading-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: url('https://i.ibb.co/93NGBjjh/IMG-6773.jpg') center/cover; z-index: 9999; }
+        .header { padding: 15px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .ver-tag { font-size: 12px; color: #888; }
+        .brand-name { font-size: 24px; font-weight: 900; color: black; margin: 0; }
+        .user-name { font-size: 14px; color: #555; }
+        .container { padding: 15px; }
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .nav-bar { display: flex; overflow-x: auto; background: white; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #eee; }
+        .nav-item { padding: 15px; white-space: nowrap; flex: 1; text-align: center; }
+        .nav-item.active { border-bottom: 3px solid #00b900; color: #00b900; font-weight: bold; }
+        .btn { width: 100%; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
+        .btn-primary { background: #00b900; color: white; }
+        .admin-badge { background: #e74c3c; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .stat-card { background: #f0f0f0; padding: 10px; border-radius: 8px; text-align: center; }
     </style>
 </head>
 <body>
     <div id="app">
         <div id="loading-screen" v-if="isLoading"></div>
 
-        <nav class="nav-bar" v-if="!isLoading">
-            <div class="nav-item" :class="{active: tab==='booking'}" @click="tab='booking'">線上訂位</div>
-            <div class="nav-item" :class="{active: tab==='menu'}" @click="tab='menu'">美味菜單</div>
-            <div class="nav-item" :class="{active: tab==='member'}" @click="tab='member'">會員中心</div>
-            <div v-if="isAdmin" class="nav-item" :class="{active: tab==='admin'}" @click="tab='admin'">POS管理</div>
-        </nav>
-
-        <div class="container" v-if="!isLoading">
-            
-            <div v-show="tab==='booking'">
-                <div class="card">
-                    <h3>📅 預約座位</h3>
-                    <label>預約日期 (週一公休)</label>
-                    <input type="date" v-model="form.date" @change="checkMonday">
-                    <label>預約時間</label>
-                    <select v-model="form.time">
-                        <option v-for="t in timeSlots">{{t}}</option>
-                    </select>
-                    <label>人數</label>
-                    <input type="number" v-model="form.guests" min="1" max="10">
-                    <label>我想預點 (選填)</label>
-                    <textarea v-model="form.preOrder" rows="3" placeholder="例如：牛肉麵x2, 小菜x1"></textarea>
-                    <button class="btn-primary" @click="submitBooking">送出預約並通知官方帳號</button>
+        <div v-else>
+            <div class="header">
+                <div>
+                    <span class="ver-tag">薩諾瓦訂位系統 Ver1.0</span>
+                    <h1 class="brand-name">薩諾瓦義式廚房</h1>
+                    <span class="user-name">您好, {{userProfile.displayName}}</span>
                 </div>
+                <div v-if="isAdmin"><span class="admin-badge">管理員</span></div>
             </div>
 
-            <div v-show="tab==='menu'">
-                <div v-for="item in menuData" class="card">
-                    <div style="display:flex; gap:15px;">
-                        <img :src="item.圖片連結" style="width:80px; height:80px; border-radius:8px; object-fit:cover;">
-                        <div>
-                            <h4 style="margin:0">{{item.品項}}</h4>
-                            <p style="color:var(--admin-red); font-weight:bold;">${{item.價格}}</p>
-                            <small style="color:#888">{{item.描述 || '經典美味推薦'}}</small>
+            <div class="nav-bar">
+                <div class="nav-item" :class="{active: tab==='booking'}" @click="tab='booking'">線上訂位</div>
+                <div class="nav-item" :class="{active: tab==='menu'}" @click="tab='menu'">精緻菜單</div>
+                <div class="nav-item" :class="{active: tab==='info'}" @click="tab='info'">交通資訊</div>
+                <div class="nav-item" :class="{active: tab==='member'}" @click="tab='member'">會員中心</div>
+                <div v-if="isAdmin" class="nav-item" :class="{active: tab==='admin'}" @click="tab='admin'">後台管理</div>
+            </div>
+
+            <div class="container">
+                <div v-if="tab==='booking'">
+                    <div class="card" v-if="!isMember">
+                        <h3>⚠️ 提示</h3>
+                        <p>您尚未註冊會員，請先前往會員中心完成註冊以啟用訂位功能。</p>
+                        <button class="btn btn-primary" @click="tab='member'">前往註冊</button>
+                    </div>
+                    <div class="card" v-else>
+                        <h3>📅 選擇預約時段</h3>
+                        <label>日期 (週一公休)</label>
+                        <input type="date" v-model="form.date" @change="checkSeats" style="width:100%; padding:10px; margin-bottom:10px;">
+                        <div v-if="availableSlots.length > 0">
+                            <label>時段 (剩餘空位)</label>
+                            <select v-model="form.time" style="width:100%; padding:10px; margin-bottom:10px;">
+                                <option v-for="s in availableSlots" :value="s.時段">{{s.時段}} (剩 {{s.剩餘空位}} 位)</option>
+                            </select>
+                            <label>人數</label>
+                            <input type="number" v-model="form.guests" min="1" max="10" style="width:100%; padding:10px; margin-bottom:10px;">
+                            <button class="btn btn-primary" @click="submitBooking">確認訂位</button>
                         </div>
+                        <p v-else-if="form.date">此日期暫無可用時段或已客滿</p>
                     </div>
                 </div>
-            </div>
 
-            <div v-show="tab==='member'">
-                <div class="card" style="text-align: center;">
-                    <img :src="userProfile.pictureUrl" style="width:80px; border-radius:50%;">
-                    <h3>{{userProfile.displayName}}</h3>
-                    <p>手機號碼驗證</p>
-                    <input type="tel" v-model="phone" placeholder="請輸入手機號碼">
-                    <button class="btn-primary" @click="verifyRole">登入 / 驗證權限</button>
-                    <hr>
-                    <p>點數餘額：0 P</p>
+                <div v-if="tab==='menu'">
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button class="btn" :class="menuSub==='full'?'btn-primary':''" @click="menuSub='full'">完整菜單</button>
+                        <button class="btn" :class="menuSub==='chef'?'btn-primary':''" @click="menuSub='chef'">主廚推薦</button>
+                    </div>
+                    <div v-for="item in menuData" class="card">
+                        <h4>{{item.品項}} - ${{item.價格}}</h4>
+                    </div>
                 </div>
-            </div>
 
-            <div v-show="tab==='admin' && isAdmin">
-                <div class="card">
-                    <h3>📊 今日營收概況</h3>
+                <div v-if="tab==='info'">
+                    <div class="card">
+                        <h3>📍 店家位置</h3>
+                        <p>地址：您的餐廳地址</p>
+                        <p>🚗 交通建議：附近有<strong>昇恆昌地下停車場</strong>，步行約 2 分鐘即可抵達。</p>
+                    </div>
+                </div>
+
+                <div v-if="tab==='member'">
+                    <div class="card" style="text-align:center;">
+                        <img :src="userProfile.pictureUrl" style="width:80px; border-radius:50%;">
+                        <h3>{{userProfile.displayName}}</h3>
+                        <input type="tel" v-model="phone" placeholder="手機號碼 (管理員請輸入驗證號碼)" style="width:80px; width:100%; padding:10px; margin:10px 0;">
+                        <button class="btn btn-primary" @click="verifyMember">儲存並登入</button>
+                    </div>
+                    <div class="card" v-if="hasAttended">
+                        <h3>📝 顧客回饋</h3>
+                        <textarea placeholder="請分享您的用餐心得..." style="width:100%; height:100px;"></textarea>
+                        <button class="btn btn-primary">送出評論</button>
+                    </div>
+                </div>
+
+                <div v-if="tab==='admin' && isAdmin">
                     <div class="stat-grid">
-                        <div class="stat-box"><h4>訂位數</h4><p>{{adminData.reservations.length}}</p></div>
-                        <div class="stat-box"><h4>預估營收</h4><p>${{totalRevenue}}</p></div>
+                        <div class="stat-card"><h4>今日訂位</h4><p>{{todayCount}} 筆</p></div>
+                        <div class="stat-card"><h4>總訂位數</h4><p>{{adminData.reservations.length}} 筆</p></div>
                     </div>
-                </div>
-
-                <h3>🔔 即將到來訂位 (智慧分位)</h3>
-                <div v-for="res in sortedReservations" class="card">
-                    <div style="display:flex; justify-content:space-between;">
-                        <strong>{{res.時間}} - {{res.姓名}}</strong>
-                        <span class="badge bg-pending">{{res.狀態}}</span>
+                    <h3>📋 即將到來訂位</h3>
+                    <div v-for="res in adminData.reservations" class="card">
+                        <div style="display:flex; justify-content:space-between;">
+                            <strong>{{res.日期}} {{res.時間}}</strong>
+                            <span class="admin-badge">{{res.狀態}}</span>
+                        </div>
+                        <p>{{res.姓名}} ({{res.人數}}人)</p>
+                        <p style="color:#00b900;">🎯 智能分配：{{ res.人數 > 4 ? '建議大圓桌' : '建議方桌' }}</p>
                     </div>
-                    <p>人數：{{res.人數}}人 | 預點：{{res.預點內容 || '無'}}</p>
-                    <p style="color:var(--line-green);">🤖 建議分配：{{ res.人數 > 4 ? '大圓桌' : '4人方桌' }}</p>
-                    <button class="btn-admin" @click="updateStatus(res)">完成入座 / 結帳</button>
                 </div>
             </div>
-
         </div>
     </div>
 
     <script>
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbwZ9kbEghsaA6U1R37XnUvqJiymyq86RfRIuV-95R_svCa4OahmrIlga0tIBIcTss1_QA/exec';
+        const ADMIN_LIST = ['0937942582', '0978375273', '0978375592'];
 
         Vue.createApp({
             data() {
                 return {
-                    isLoading: true,
-                    tab: 'booking',
-                    isAdmin: false,
-                    phone: '',
-                    userProfile: {},
-                    menuData: [],
+                    isLoading: true, tab: 'booking', menuSub: 'full',
+                    userProfile: {}, isMember: false, isAdmin: false,
+                    phone: '', menuData: [], seatData: [],
+                    form: { date: '', time: '', guests: 2, preOrder: '' },
                     adminData: { reservations: [] },
-                    form: { date: '', time: '12:00', guests: 2, preOrder: '' },
-                    timeSlots: ['11:30','12:00','12:30','13:00','17:30','18:00','18:30','19:00']
+                    hasAttended: false // 此處應根據後端紀錄判斷用戶是否用餐完成
                 }
             },
             computed: {
-                totalRevenue() {
-                    return this.adminData.reservations.length * 500; // 簡易估算
+                availableSlots() {
+                    return this.seatData.filter(s => {
+                        const sDate = new Date(s.日期).toISOString().split('T')[0];
+                        return sDate === this.form.date && s.剩餘空位 > 0;
+                    });
                 },
-                sortedReservations() {
-                    return this.adminData.reservations.slice().reverse();
+                todayCount() {
+                    const today = new Date().toISOString().split('T')[0];
+                    return this.adminData.reservations.filter(r => r.日期 === today).length;
                 }
             },
             mounted() {
                 liff.init({ liffId: "2008861231-1aeXBtp0" }).then(() => {
-                    if (!liff.isLoggedIn()) { liff.login(); }
+                    if (!liff.isLoggedIn()) liff.login();
                     else {
                         liff.getProfile().then(p => { 
                             this.userProfile = p;
-                            this.loadInitialData();
+                            this.loadData();
                         });
                     }
                 });
-                setTimeout(() => { this.isLoading = false; }, 2500);
+                setTimeout(() => { this.isLoading = false; }, 2000);
             },
             methods: {
-                loadInitialData() {
-                    fetch(GAS_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({ action: 'getInitialData' })
-                    }).then(r => r.json()).then(d => { this.menuData = d.menu; });
+                loadData() {
+                    fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'getInitialData' }) })
+                        .then(r => r.json()).then(d => {
+                            this.menuData = d.menu;
+                            this.seatData = d.seats;
+                        });
                 },
-                checkMonday() {
-                    if (new Date(this.form.date).getDay() === 1) {
-                        alert("每週一公休，請選擇其他日期！");
-                        this.form.date = '';
+                verifyMember() {
+                    if(!this.phone) return alert("請輸入手機號碼");
+                    this.isMember = true;
+                    if(ADMIN_LIST.includes(this.phone)) {
+                        this.isAdmin = true;
+                        this.fetchAdminData();
                     }
+                    alert("驗證成功！");
+                },
+                fetchAdminData() {
+                    fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'getAdminData', phone: this.phone }) })
+                        .then(r => r.json()).then(d => { this.adminData.reservations = d.allReservations; });
+                },
+                checkSeats() {
+                    let day = new Date(this.form.date).getDay();
+                    if(day === 1) { alert("週一公休！"); this.form.date = ''; }
                 },
                 submitBooking() {
-                    if(!this.form.date) return alert("請選擇日期");
-                    fetch(GAS_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({ action: 'submitReservation', data: { ...this.form, name: this.userProfile.displayName, phone: this.phone } })
-                    }).then(r => r.json()).then(d => {
-                        alert(d.msg);
-                        if(d.success) {
-                            liff.sendMessages([{
-                                type: 'text',
-                                text: `🍴 訂位成功通知 🍴\n姓名：${this.userProfile.displayName}\n時間：${this.form.date} ${this.form.time}\n人數：${this.form.guests}人\n預點餐點：${this.form.preOrder || '無'}`
-                            }]).then(() => liff.closeWindow());
-                        }
-                    });
-                },
-                verifyRole() {
-                    fetch(GAS_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({ action: 'getAdminData', phone: this.phone })
-                    }).then(r => r.json()).then(d => {
-                        if(d.isManager) {
-                            this.isAdmin = true;
-                            this.adminData.reservations = d.allReservations;
-                            this.tab = 'admin';
-                            alert("歡迎回來，管理者");
-                        } else {
-                            alert("手機號碼驗證完成，目前為一般會員");
-                        }
-                    });
+                    fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'submitReservation', data: { ...this.form, name: this.userProfile.displayName, phone: this.phone } }) })
+                        .then(r => r.json()).then(d => {
+                            alert(d.msg);
+                            if(d.success) liff.closeWindow();
+                        });
                 }
             }
         }).mount('#app');
