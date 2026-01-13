@@ -1,0 +1,8 @@
+{
+  "name": "Restaurant LIFF App",
+  "description": "A comprehensive LINE LIFF application for restaurant reservations, menu ordering, and POS management backed by Google Sheets.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
